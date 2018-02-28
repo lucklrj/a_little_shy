@@ -12,6 +12,20 @@ import (
 	"strconv"
 )
 
+type shyData struct {
+	Title             string
+	WebLink           string
+	AuthorPublishDate string
+	Authorame         string
+	AuthorLink        string
+	AuthorAvatarLink  string
+	Content           string
+}
+
+func (s shyData) Do() {
+	fmt.Println(s.Title)
+}
+
 var (
 	maxPage     = 1
 	startPage   = 1
@@ -24,9 +38,7 @@ func init() {
 	Request = gorequest.New()
 }
 func main() {
-	
 	login()
-	
 	for {
 		color.Green("正在获取第" + strconv.Itoa(startPage) + "页数据。")
 		listUrl := makeListUrl(startPage)
@@ -35,7 +47,17 @@ func main() {
 			outputAllErros(errs, false)
 			
 		} else {
-			fmt.Println(len(ids))
+			idsLength := len(ids)
+			list := make([]chan shyData, idsLength)
+			for i := 0; i < idsLength; i++ {
+				list[i] = make(chan shyData)
+				go getContent(ids[i], list[i])
+			}
+			
+			for _, ch := range list {
+				singleData := <-ch
+				singleData.Do()
+			}
 		}
 		startPage = startPage + 1
 		if startPage > maxPage {
@@ -44,7 +66,6 @@ func main() {
 		}
 	}
 }
-
 func login() {
 	color.Green("检查是否需要输入验证码")
 	_, html, errs := Request.Get("http://www.douban.com/").End()
@@ -122,7 +143,12 @@ func getViewIds(listUrl string) (ids []string, err []error) {
 		return ids, nil
 	}
 }
-
+func getContent(id string, c chan shyData) {
+	
+	singleData := shyData{}
+	singleData.Title = "aa:" + id
+	c <- singleData
+}
 func outputAllErros(errs []error, end bool) {
 	for _, err := range (errs) {
 		color.Red(err.Error())
