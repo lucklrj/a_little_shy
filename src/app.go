@@ -47,7 +47,6 @@ func init() {
 	
 }
 func main() {
-	checkAccountandPassword()
 	login()
 	for {
 		color.Green("正在获取第" + strconv.Itoa(startPage) + "页数据。")
@@ -87,6 +86,8 @@ func checkAccountandPassword() {
 	}
 }
 func login() {
+	checkAccountandPassword()
+	
 	color.Green("检查是否需要输入验证码")
 	_, html, errs := Request.Get("http://www.douban.com/").End()
 	if errs != nil {
@@ -106,7 +107,7 @@ func login() {
 		}
 		saveFile("captcha_id.jpg", imgContent, false)
 		
-		color.Red("请输入图片验证数字：")
+		color.Red("请输入图片验证码：")
 		fmt.Scanln(&captchaCode)
 	}
 	color.Green("开始登陆")
@@ -130,7 +131,18 @@ func login() {
 	if strings.Contains(html, "我的小组话题") {
 		color.Green("登陆成功")
 	} else {
-		color.Red("登陆失败，请重试")
+		//检查失败原因 验证码不正确
+		if strings.Contains(html, "验证码不正确") == true {
+			color.Red("验证码不正确,请重试")
+		}
+		if strings.Contains(html, "帐号和密码不匹配") == true {
+			DoubanPassword = ""
+			color.Red("帐号和密码不匹配,请重试")
+		}
+		if strings.Contains(html, "该用户不存在") == true {
+			DoubanAccount = ""
+			color.Red("帐号不存在,请重试")
+		}
 		login()
 	}
 }
