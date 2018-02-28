@@ -10,6 +10,7 @@ import (
 	"strings"
 	"regexp"
 	"strconv"
+	"flag"
 )
 
 type shyData struct {
@@ -27,17 +28,26 @@ func (s shyData) Do() {
 }
 
 var (
-	maxPage     = 1
-	startPage   = 1
-	Request     *gorequest.SuperAgent
-	captchaCode string
-	captchaID   string
+	maxPage        = 1
+	startPage      = 1
+	Request        *gorequest.SuperAgent
+	captchaCode    string
+	captchaID      string
+	DoubanAccount  string
+	DoubanPassword string
+	inputAccount   = flag.String("a", "", "登陆豆瓣的账号")
+	inputPassword  = flag.String("p", "", "登陆豆瓣的密码")
 )
 
 func init() {
 	Request = gorequest.New()
+	flag.Parse()
+	DoubanAccount = *inputAccount
+	DoubanPassword = *inputPassword
+	
 }
 func main() {
+	checkAccountandPassword()
 	login()
 	for {
 		color.Green("正在获取第" + strconv.Itoa(startPage) + "页数据。")
@@ -66,6 +76,16 @@ func main() {
 		}
 	}
 }
+func checkAccountandPassword() {
+	if DoubanAccount == "" {
+		color.Red("请输入豆瓣的登陆账户")
+		fmt.Scanln(&DoubanAccount)
+	}
+	if DoubanPassword == "" {
+		color.Red("请输入豆瓣的登陆密码")
+		fmt.Scanln(&DoubanPassword)
+	}
+}
 func login() {
 	color.Green("检查是否需要输入验证码")
 	_, html, errs := Request.Get("http://www.douban.com/").End()
@@ -86,14 +106,14 @@ func login() {
 		}
 		saveFile("captcha_id.jpg", imgContent, false)
 		
-		color.Green("请输入图片验证数字：")
+		color.Red("请输入图片验证数字：")
 		fmt.Scanln(&captchaCode)
 	}
 	color.Green("开始登陆")
 	
 	postData := make(map[string]string)
-	postData["form_email"] = "sunny_lrj@yeah.net"
-	postData["form_password"] = "123asd123"
+	postData["form_email"] = DoubanAccount
+	postData["form_password"] = DoubanPassword
 	postData["redir"] = "http://www.douban.com/group/"
 	postData["source"] = "group"
 	postData["user_login"] = "登录"
