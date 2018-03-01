@@ -11,9 +11,12 @@ import (
 	"regexp"
 	"strconv"
 	"flag"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type shyData struct {
+	ID                string
+	FetchResult       string
 	Title             string
 	WebLink           string
 	AuthorPublishDate string
@@ -24,19 +27,20 @@ type shyData struct {
 }
 
 func (s shyData) Do() {
-	fmt.Println(s.Title)
+	fmt.Println(s.ID + "------" + s.Title)
 }
 
 var (
 	maxPage        = 1
 	startPage      = 1
-	Request        *gorequest.SuperAgent
 	captchaCode    string
 	captchaID      string
 	DoubanAccount  string
 	DoubanPassword string
 	inputAccount   = flag.String("a", "", "登陆豆瓣的账号")
 	inputPassword  = flag.String("p", "", "登陆豆瓣的密码")
+	DB             *leveldb.DB
+	Request        *gorequest.SuperAgent
 )
 
 func init() {
@@ -45,9 +49,12 @@ func init() {
 	DoubanAccount = *inputAccount
 	DoubanPassword = *inputPassword
 	
+	DB = initDB()
+	defer DB.Close()
 }
 func main() {
 	login()
+	
 	for {
 		color.Green("正在获取第" + strconv.Itoa(startPage) + "页数据。")
 		listUrl := makeListUrl(startPage)
@@ -56,7 +63,11 @@ func main() {
 			outputAllErros(errs, false)
 			
 		} else {
+			ids = filterIds(DB, ids)
+			
 			idsLength := len(ids)
+			fmt.Println(idsLength)
+			
 			list := make([]chan shyData, idsLength)
 			for i := 0; i < idsLength; i++ {
 				list[i] = make(chan shyData)
@@ -74,6 +85,14 @@ func main() {
 			os.Exit(0)
 		}
 	}
+}
+func initDB() *leveldb.DB {
+	DB, err := leveldb.OpenFile("db", nil)
+	if err != nil {
+		color.Red(err.Error())
+		os.Exit(0)
+	}
+	return DB
 }
 func checkAccountandPassword() {
 	if DoubanAccount == "" {
@@ -146,7 +165,6 @@ func login() {
 		login()
 	}
 }
-
 func makeListUrl(page int) string {
 	url := "https://www.douban.com/group/haixiuzu/discussion?start=" + strconv.Itoa((page-1)*25)
 	return url
@@ -175,10 +193,44 @@ func getViewIds(listUrl string) (ids []string, err []error) {
 		return ids, nil
 	}
 }
+func filterIds(db *leveldb.DB, ids []string) []string {
+	filterIds := make([]string, 0)
+	for _, singleID := range (ids) {
+		isExists, _ := db.Has([]byte(singleID), nil)
+		if isExists == true {
+			continue
+		} else {
+			filterIds = append(filterIds, singleID)
+		}
+	}
+	return filterIds
+}
 func getContent(id string, c chan shyData) {
-	
 	singleData := shyData{}
-	singleData.Title = "aa:" + id
+	singleData.ID = id
+	
+	_, html, errs := Request.Get("https://www.douban.com/group/topic/" + id + "/").End()
+	if errs != nil {
+		outputAllErros(errs, false)
+		singleData.FetchResult = "获取html内容错误"
+		c <- singleData
+		return
+	}
+	
+	doc, err := goquery.NewDocumentFromReader(bufio.NewReader(strings.NewReader(html)))
+	if err != nil {
+		color.Red(err.Error())
+		singleData.FetchResult = "解析html文档错误"
+		c <- singleData
+		return
+	}
+	
+	//获取主题
+	doc.Find("h1").Each(func(i int, s *goquery.Selection) {
+		title := s.Text()
+		singleData.Title = trim(title)
+		
+	})
 	c <- singleData
 }
 func outputAllErros(errs []error, end bool) {
@@ -201,4 +253,9 @@ func saveFile(path string, content string, append bool) (result bool, err error)
 	fd.Write(buf)
 	defer fd.Close()
 	return true, err
+}
+func trim(s string) string {
+	s = strings.Trim(s, "\n")
+	s = strings.Trim(s, " ")
+	return s
 }
