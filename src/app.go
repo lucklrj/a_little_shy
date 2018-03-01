@@ -15,10 +15,9 @@ import (
 )
 
 type shyData struct {
-	ID                string
+	DoubanId          string
 	FetchResult       string
 	Title             string
-	WebLink           string
 	AuthorPublishDate string
 	Authorame         string
 	AuthorLink        string
@@ -27,7 +26,7 @@ type shyData struct {
 }
 
 func (s shyData) Do() {
-	fmt.Println(s.ID + "------" + s.Title)
+	fmt.Println(s.DoubanId + "------" + s.Title)
 }
 
 var (
@@ -207,7 +206,7 @@ func filterIds(db *leveldb.DB, ids []string) []string {
 }
 func getContent(id string, c chan shyData) {
 	singleData := shyData{}
-	singleData.ID = id
+	singleData.DoubanId = id
 	
 	_, html, errs := Request.Get("https://www.douban.com/group/topic/" + id + "/").End()
 	if errs != nil {
