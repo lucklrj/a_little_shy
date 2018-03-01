@@ -1,17 +1,18 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
 	"github.com/fatih/color"
 	"github.com/parnurzeal/gorequest"
 	"os"
-	"strings"
-	"regexp"
-	"strconv"
 	"flag"
 	"github.com/syndtr/goleveldb/leveldb"
+	"sync"
+	"strconv"
+	"strings"
+	"regexp"
+	"github.com/PuerkitoBio/goquery"
+	"bufio"
 )
 
 type shyData struct {
@@ -29,6 +30,24 @@ func (s shyData) Do() {
 	fmt.Println(s.DoubanId + "------" + s.Title)
 }
 
+type HttpRequest struct {
+	Request *gorequest.SuperAgent
+	mu      sync.Mutex
+}
+
+func (h *HttpRequest) Get(url string) (body string, errs []error) {
+	h.mu.Lock()
+	_, body, errs = h.Request.Get(url).End()
+	h.mu.Unlock()
+	return body, errs
+}
+func (h *HttpRequest) Post(url string, postData map[string]string) (body string, errs []error) {
+	h.mu.Lock()
+	_, body, errs = h.Request.Post(url).Type("multipart").Send(postData).End()
+	h.mu.Unlock()
+	return body, errs
+}
+
 var (
 	maxPage        = 1
 	startPage      = 1
@@ -39,11 +58,11 @@ var (
 	inputAccount   = flag.String("a", "", "登陆豆瓣的账号")
 	inputPassword  = flag.String("p", "", "登陆豆瓣的密码")
 	DB             *leveldb.DB
-	Request        *gorequest.SuperAgent
+	Request        HttpRequest
 )
 
 func init() {
-	Request = gorequest.New()
+	Request = HttpRequest{Request: gorequest.New()}
 	flag.Parse()
 	DoubanAccount = *inputAccount
 	DoubanPassword = *inputPassword
@@ -107,7 +126,7 @@ func login() {
 	checkAccountandPassword()
 	
 	color.Green("检查是否需要输入验证码")
-	_, html, errs := Request.Get("http://www.douban.com/").End()
+	html, errs := Request.Get("http://www.douban.com/")
 	if errs != nil {
 		outputAllErros(errs, true)
 	}
@@ -119,7 +138,7 @@ func login() {
 		match := r.FindAllStringSubmatch(html, -1)
 		captchaID = match[0][1]
 		
-		_, imgContent, errs := Request.Get("http://www.douban.com/misc/captcha?id=" + captchaID + "&size=s").End()
+		imgContent, errs := Request.Get("http://www.douban.com/misc/captcha?id=" + captchaID + "&size=s")
 		if errs != nil {
 			outputAllErros(errs, true)
 		}
@@ -142,7 +161,7 @@ func login() {
 		postData["captcha-solution"] = captchaCode
 	}
 	
-	_, html, errs = Request.Post("https://www.douban.com/accounts/login").Type("multipart").Send(postData).End()
+	html, errs = Request.Post("https://www.douban.com/accounts/login", postData)
 	if errs != nil {
 		outputAllErros(errs, true)
 	}
@@ -170,7 +189,7 @@ func makeListUrl(page int) string {
 }
 func getViewIds(listUrl string) (ids []string, err []error) {
 	ids = make([]string, 0)
-	_, body, errs := Request.Get(listUrl).End()
+	body, errs := Request.Get(listUrl)
 	if errs != nil {
 		return nil, errs
 	} else {
@@ -208,7 +227,7 @@ func getContent(id string, c chan shyData) {
 	singleData := shyData{}
 	singleData.DoubanId = id
 	
-	_, html, errs := Request.Get("https://www.douban.com/group/topic/" + id + "/").End()
+	html, errs := Request.Get("https://www.douban.com/group/topic/" + id + "/")
 	if errs != nil {
 		outputAllErros(errs, false)
 		singleData.FetchResult = "获取html内容错误"
