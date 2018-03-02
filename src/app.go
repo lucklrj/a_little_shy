@@ -37,6 +37,12 @@ func (s shyData) Do() {
 	fmt.Println("Content" + ":" + s.Content)
 	fmt.Println("-------------------------------------")
 	
+	if s.FetchResult == "success" || s.FetchResult == "noImage" {
+		err := DB.Put([]byte(s.DoubanId), []byte("1"), nil)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+	}
 }
 
 type HttpRequest struct {
@@ -77,7 +83,6 @@ func init() {
 	DoubanPassword = *inputPassword
 	
 	DB = initDB()
-	defer DB.Close()
 }
 func main() {
 	login()
@@ -106,6 +111,7 @@ func main() {
 		startPage = startPage + 1
 		if startPage > maxPage {
 			color.Red("已达到最大页数限制")
+			DB.Close()
 			os.Exit(0)
 		}
 	}
@@ -284,7 +290,11 @@ func getContent(id string, c chan shyData) {
 		})
 	}
 	
-	singleData.FetchResult = "success"
+	if strings.Contains(singleData.Content, "<img") == true {
+		singleData.FetchResult = "success"
+	} else {
+		singleData.FetchResult = "noImage"
+	}
 	
 	c <- singleData
 }
