@@ -27,7 +27,16 @@ type shyData struct {
 }
 
 func (s shyData) Do() {
-	fmt.Println(s.DoubanId + "------" + s.Title)
+	fmt.Println("DoubanId" + ":" + s.DoubanId)
+	fmt.Println("FetchResult" + ":" + s.FetchResult)
+	fmt.Println("Title" + ":" + s.Title)
+	fmt.Println("AuthorPublishDate" + ":" + s.AuthorPublishDate)
+	fmt.Println("Authorame" + ":" + s.Authorame)
+	fmt.Println("AuthorLink" + ":" + s.AuthorLink)
+	fmt.Println("AuthorAvatarLink" + ":" + s.AuthorAvatarLink)
+	fmt.Println("Content" + ":" + s.Content)
+	fmt.Println("-------------------------------------")
+	
 }
 
 type HttpRequest struct {
@@ -82,10 +91,7 @@ func main() {
 			
 		} else {
 			ids = filterIds(DB, ids)
-			
 			idsLength := len(ids)
-			fmt.Println(idsLength)
-			
 			list := make([]chan shyData, idsLength)
 			for i := 0; i < idsLength; i++ {
 				list[i] = make(chan shyData)
@@ -245,10 +251,41 @@ func getContent(id string, c chan shyData) {
 	
 	//获取主题
 	doc.Find("h1").Each(func(i int, s *goquery.Selection) {
-		title := s.Text()
-		singleData.Title = trim(title)
-		
+		singleData.Title = trim(s.Text())
 	})
+	
+	// AuthorPublishDate 作者发布时间
+	doc.Find(".color-green").Each(func(i int, s *goquery.Selection) {
+		singleData.AuthorPublishDate = trim(s.Text())
+	})
+	//Authorame, 作者名.AuthorLink 作者连接
+	doc.Find(".from a").Each(func(i int, s *goquery.Selection) {
+		Authorame := s.Text()
+		singleData.Authorame = trim(Authorame)
+		
+		AuthorLink, _ := s.Attr("href")
+		singleData.AuthorLink = AuthorLink
+	})
+	//AuthorAvatarLink, 作者头像连接
+	doc.Find(".topic-content .user-face .pil").Each(func(i int, s *goquery.Selection) {
+		AuthorAvatarLink, _ := s.Attr("src")
+		singleData.AuthorAvatarLink = AuthorAvatarLink
+	})
+	
+	//Content 获取内容
+	doc.Find(".topic-richtext").Each(func(i int, s *goquery.Selection) {
+		Content, _ := s.Html()
+		singleData.Content = trim(clearTags(Content))
+	})
+	if singleData.Content == "" {
+		doc.Find(".topic-figure").Each(func(i int, s *goquery.Selection) {
+			Content, _ := s.Html()
+			singleData.Content = trim(clearTags(Content))
+		})
+	}
+	
+	singleData.FetchResult = "success"
+	
 	c <- singleData
 }
 func outputAllErros(errs []error, end bool) {
@@ -276,4 +313,11 @@ func trim(s string) string {
 	s = strings.Trim(s, "\n")
 	s = strings.Trim(s, " ")
 	return s
+}
+func clearTags(str string) string {
+	str = strings.Replace(str, "\n", "", -1)
+	str = regexp.MustCompile(`<\/?div.*?>`).ReplaceAllString(str, "")
+	str = regexp.MustCompile(`<\/?p.*?>`).ReplaceAllString(str, "")
+	str = regexp.MustCompile(`<img.*?src=([\"\'])(.*?)([\"\']).*?\/?>`).ReplaceAllString(str, "<img src=$1$2$3 />")
+	return str
 }
