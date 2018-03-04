@@ -356,6 +356,6 @@ func postToRomte() {
 	if errs != nil {
 		outputAllErros(errs, true)
 	} else {
-		color.Green("上传失败：" + body)
+		color.Green("上传结束，收到返回：" + body)
 	}
 }
