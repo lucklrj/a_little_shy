@@ -27,22 +27,25 @@ type shyData struct {
 }
 
 func (s shyData) Do() {
-	fmt.Println("DoubanId" + ":" + s.DoubanId)
-	fmt.Println("FetchResult" + ":" + s.FetchResult)
-	fmt.Println("Title" + ":" + s.Title)
-	fmt.Println("AuthorPublishDate" + ":" + s.AuthorPublishDate)
-	fmt.Println("Authorame" + ":" + s.Authorame)
-	fmt.Println("AuthorLink" + ":" + s.AuthorLink)
-	fmt.Println("AuthorAvatarLink" + ":" + s.AuthorAvatarLink)
-	fmt.Println("Content" + ":" + s.Content)
-	fmt.Println("-------------------------------------")
-	
+	//fmt.Println("DoubanId" + ":" + s.DoubanId)
+	//fmt.Println("FetchResult" + ":" + s.FetchResult)
+	//fmt.Println("Title" + ":" + s.Title)
+	//fmt.Println("AuthorPublishDate" + ":" + s.AuthorPublishDate)
+	//fmt.Println("Authorame" + ":" + s.Authorame)
+	//fmt.Println("AuthorLink" + ":" + s.AuthorLink)
+	//fmt.Println("AuthorAvatarLink" + ":" + s.AuthorAvatarLink)
+	//fmt.Println("Content" + ":" + s.Content)
+	//fmt.Println("-------------------------------------")
+	if s.FetchResult == "success" {
+		AllShyData = append(AllShyData, s)
+	}
 	if s.FetchResult == "success" || s.FetchResult == "noImage" {
 		err := DB.Put([]byte(s.DoubanId), []byte("1"), nil)
 		if err != nil {
 			fmt.Println(err.Error())
 		}
 	}
+	
 }
 
 type HttpRequest struct {
@@ -64,16 +67,19 @@ func (h *HttpRequest) Post(url string, postData map[string]string) (body string,
 }
 
 var (
-	maxPage        = 1
-	startPage      = 1
-	captchaCode    string
-	captchaID      string
-	DoubanAccount  string
-	DoubanPassword string
-	inputAccount   = flag.String("a", "", "登陆豆瓣的账号")
-	inputPassword  = flag.String("p", "", "登陆豆瓣的密码")
-	DB             *leveldb.DB
-	Request        HttpRequest
+	maxPage             = 1
+	startPage           = 1
+	captchaCode         string
+	captchaID           string
+	DoubanAccount       string
+	DoubanPassword      string
+	DataReceiveUrl      string
+	inputAccount        = flag.String("a", "", "登陆豆瓣的账号")
+	inputPassword       = flag.String("p", "", "登陆豆瓣的密码")
+	inputDataReceiveUrl = flag.String("u", "", "采集数据接收的远端地址")
+	DB                  *leveldb.DB
+	Request             HttpRequest
+	AllShyData          []shyData
 )
 
 func init() {
@@ -81,6 +87,7 @@ func init() {
 	flag.Parse()
 	DoubanAccount = *inputAccount
 	DoubanPassword = *inputPassword
+	DataReceiveUrl = *inputDataReceiveUrl
 	
 	DB = initDB()
 }
@@ -112,6 +119,8 @@ func main() {
 		if startPage > maxPage {
 			color.Red("已达到最大页数限制")
 			DB.Close()
+			
+			postToRomte()
 			os.Exit(0)
 		}
 	}
@@ -132,6 +141,10 @@ func checkAccountandPassword() {
 	if DoubanPassword == "" {
 		color.Red("请输入豆瓣的登陆密码")
 		fmt.Scanln(&DoubanPassword)
+	}
+	if DataReceiveUrl == "" {
+		color.Red("请输入数据接收地址")
+		fmt.Scanln(&DataReceiveUrl)
 	}
 }
 func login() {
@@ -330,4 +343,12 @@ func clearTags(str string) string {
 	str = regexp.MustCompile(`<\/?p.*?>`).ReplaceAllString(str, "")
 	str = regexp.MustCompile(`<img.*?src=([\"\'])(.*?)([\"\']).*?\/?>`).ReplaceAllString(str, "<img src=$1$2$3 />")
 	return str
+}
+func postToRomte() {
+	_, body, errs := Request.Request.Post(DataReceiveUrl).Type("multipart").Send(AllShyData).End()
+	if errs != nil {
+		outputAllErros(errs, true)
+	} else {
+		fmt.Println(body)
+	}
 }
