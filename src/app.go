@@ -205,6 +205,12 @@ func login() {
 			DoubanAccount = ""
 			color.Red("帐号不存在,请重试")
 		}
+		if strings.Contains(html, "暂时锁定") == true {
+			DoubanAccount = ""
+			color.Red("帐号已经被锁定。")
+			os.Exit(0)
+		}
+		
 		login()
 	}
 }
