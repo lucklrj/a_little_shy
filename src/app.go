@@ -351,10 +351,11 @@ func clearTags(str string) string {
 	return str
 }
 func postToRomte() {
+	color.Green("正在上传数据")
 	_, body, errs := Request.Request.Post(DataReceiveUrl).Type("multipart").Send(AllShyData).End()
 	if errs != nil {
 		outputAllErros(errs, true)
 	} else {
-		fmt.Println(body)
+		color.Green("上传失败：" + body)
 	}
 }
