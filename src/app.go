@@ -67,16 +67,17 @@ func (h *HttpRequest) Post(url string, postData map[string]string) (body string,
 }
 
 var (
-	maxPage             = 1
 	startPage           = 1
 	captchaCode         string
 	captchaID           string
 	DoubanAccount       string
 	DoubanPassword      string
 	DataReceiveUrl      string
-	inputAccount        = flag.String("a", "", "登陆豆瓣的账号")
-	inputPassword       = flag.String("p", "", "登陆豆瓣的密码")
-	inputDataReceiveUrl = flag.String("u", "", "采集数据接收的远端地址")
+	MaxPage             int
+	inputAccount        = flag.String("douban-account", "", "登陆豆瓣的账号")
+	inputPassword       = flag.String("douban-password", "", "登陆豆瓣的密码")
+	inputDataReceiveUrl = flag.String("remote-url", "", "采集数据接收的远端地址")
+	inputMaxPage        = flag.String("max-page", "5", "单次采集最大页数")
 	DB                  *leveldb.DB
 	Request             HttpRequest
 	AllShyData          []shyData
@@ -88,6 +89,7 @@ func init() {
 	DoubanAccount = *inputAccount
 	DoubanPassword = *inputPassword
 	DataReceiveUrl = *inputDataReceiveUrl
+	MaxPage, _ = strconv.Atoi(*inputMaxPage)
 	
 	DB = initDB()
 }
@@ -116,7 +118,7 @@ func main() {
 			}
 		}
 		startPage = startPage + 1
-		if startPage > maxPage {
+		if startPage > MaxPage {
 			color.Red("已达到最大页数限制")
 			DB.Close()
 			
