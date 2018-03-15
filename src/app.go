@@ -196,6 +196,10 @@ func login() {
 		color.Green("登陆成功")
 	} else {
 		//检查失败原因 验证码不正确
+		if strings.Contains(html, "个性域名格式不正确") == true {
+			DoubanAccount = ""
+			color.Red("个性域名格式不正确，请重信输入账号")
+		}
 		if strings.Contains(html, "验证码不正确") == true {
 			color.Red("验证码不正确,请重试")
 		}
