@@ -153,7 +153,7 @@ func login() {
 	checkAccountandPassword()
 	
 	color.Green("检查是否需要输入验证码")
-	html, errs := Request.Get("http://www.douban.com/")
+	html, errs := Request.Get("https://accounts.douban.com/login")
 	if errs != nil {
 		outputAllErros(errs, true)
 	}
@@ -165,7 +165,7 @@ func login() {
 		match := r.FindAllStringSubmatch(html, -1)
 		captchaID = match[0][1]
 		
-		imgContent, errs := Request.Get("http://www.douban.com/misc/captcha?id=" + captchaID + "&size=s")
+		imgContent, errs := Request.Get("https://www.douban.com/misc/captcha?id=" + captchaID + "&size=s")
 		if errs != nil {
 			outputAllErros(errs, true)
 		}
@@ -181,18 +181,17 @@ func login() {
 	postData["form_password"] = DoubanPassword
 	postData["redir"] = "http://www.douban.com/group/"
 	postData["source"] = "group"
-	postData["user_login"] = "登录"
+	postData["login"] = "登录"
 	postData["remember"] = "on"
 	if isNeedCheck == true {
 		postData["captcha-id"] = captchaID
 		postData["captcha-solution"] = captchaCode
 	}
-	
-	html, errs = Request.Post("https://www.douban.com/accounts/login", postData)
+	html, errs = Request.Post("https://accounts.douban.com/login", postData)
 	if errs != nil {
 		outputAllErros(errs, true)
 	}
-	if strings.Contains(html, "我的小组话题") {
+	if strings.Contains(html, "我的小组讨论") {
 		color.Green("登陆成功")
 	} else {
 		//检查失败原因 验证码不正确
