@@ -1,37 +1,38 @@
 package main
 
 import (
+	"bufio"
+	"flag"
 	"fmt"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/fatih/color"
 	"github.com/parnurzeal/gorequest"
-	"os"
-	"flag"
 	"github.com/syndtr/goleveldb/leveldb"
-	"sync"
+	"github.com/tidwall/gjson"
+	"os"
+	"regexp"
 	"strconv"
 	"strings"
-	"regexp"
-	"github.com/PuerkitoBio/goquery"
-	"bufio"
+	"sync"
 )
 
 type shyData struct {
-	DoubanId          string
+	DouBanId          string
 	FetchResult       string
 	Title             string
 	AuthorPublishDate string
-	Authorame         string
+	AuthorName        string
 	AuthorLink        string
 	AuthorAvatarLink  string
 	Content           string
 }
 
 func (s shyData) Do() {
-	//fmt.Println("DoubanId" + ":" + s.DoubanId)
+	//fmt.Println("DouBanId" + ":" + s.DouBanId)
 	//fmt.Println("FetchResult" + ":" + s.FetchResult)
 	//fmt.Println("Title" + ":" + s.Title)
 	//fmt.Println("AuthorPublishDate" + ":" + s.AuthorPublishDate)
-	//fmt.Println("Authorame" + ":" + s.Authorame)
+	//fmt.Println("AuthorName" + ":" + s.AuthorName)
 	//fmt.Println("AuthorLink" + ":" + s.AuthorLink)
 	//fmt.Println("AuthorAvatarLink" + ":" + s.AuthorAvatarLink)
 	//fmt.Println("Content" + ":" + s.Content)
@@ -39,13 +40,6 @@ func (s shyData) Do() {
 	if s.FetchResult == "success" {
 		AllShyData = append(AllShyData, s)
 	}
-	if s.FetchResult == "success" || s.FetchResult == "noImage" {
-		err := DB.Put([]byte(s.DoubanId), []byte("1"), nil)
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-	}
-	
 }
 
 type HttpRequest struct {
@@ -77,7 +71,7 @@ var (
 	inputAccount        = flag.String("douban-account", "", "登陆豆瓣的账号")
 	inputPassword       = flag.String("douban-password", "", "登陆豆瓣的密码")
 	inputDataReceiveUrl = flag.String("remote-url", "", "采集数据接收的远端地址")
-	inputMaxPage        = flag.String("max-page", "5", "单次采集最大页数")
+	inputMaxPage        = flag.String("max-page", "1", "单次采集最大页数")
 	DB                  *leveldb.DB
 	Request             HttpRequest
 	AllShyData          []shyData
@@ -119,13 +113,13 @@ func main() {
 		}
 		startPage = startPage + 1
 		if startPage > MaxPage {
-			color.Red("已达到最大页数限制")
-			DB.Close()
-			
-			postToRomte()
-			os.Exit(0)
+			color.Green("已达到最大页数限制")
+			postToRemote()
+			break
 		}
 	}
+	defer DB.Close()
+	os.Exit(0)
 }
 func initDB() *leveldb.DB {
 	DB, err := leveldb.OpenFile("db", nil)
@@ -157,9 +151,13 @@ func login() {
 	if errs != nil {
 		outputAllErros(errs, true)
 	}
+	if html == "Please try later." {
+		color.Red("请求频繁，被豆瓣限制.")
+		os.Exit(0)
+	}
 	
 	isNeedCheck := false
-	if strings.Contains(html, "captcha") == true {
+	if strings.Contains(html, "captcha-id") == true {
 		isNeedCheck = true
 		r, _ := regexp.Compile(`<input.*?name="captcha\-id".*?value="(.*?)"\/>`)
 		match := r.FindAllStringSubmatch(html, -1)
@@ -177,46 +175,31 @@ func login() {
 	color.Green("开始登陆")
 	
 	postData := make(map[string]string)
-	postData["form_email"] = DoubanAccount
-	postData["form_password"] = DoubanPassword
+	postData["ck"] = ""
+	postData["name"] = DoubanAccount
+	postData["password"] = DoubanPassword
 	postData["redir"] = "http://www.douban.com/group/"
-	postData["source"] = "group"
-	postData["login"] = "登录"
+	postData["ticket"] =""
 	postData["remember"] = "on"
 	if isNeedCheck == true {
 		postData["captcha-id"] = captchaID
 		postData["captcha-solution"] = captchaCode
 	}
-	html, errs = Request.Post("https://accounts.douban.com/login", postData)
+	html, errs = Request.Post("https://accounts.douban.com/j/mobile/login/basic", postData)
 	if errs != nil {
 		outputAllErros(errs, true)
 	}
-	if strings.Contains(html, "我的小组讨论") {
+
+	description :=gjson.Parse(html).Get("description").String()
+
+
+	if description == "处理成功"{
 		color.Green("登陆成功")
 	} else {
 		//检查失败原因 验证码不正确
-		if strings.Contains(html, "个性域名格式不正确") == true {
-			DoubanAccount = ""
-			color.Red("个性域名格式不正确，请重信输入账号")
-		}
-		if strings.Contains(html, "验证码不正确") == true {
-			color.Red("验证码不正确,请重试")
-		}
-		if strings.Contains(html, "帐号和密码不匹配") == true {
-			DoubanPassword = ""
-			color.Red("帐号和密码不匹配,请重试")
-		}
-		if strings.Contains(html, "该用户不存在") == true {
-			DoubanAccount = ""
-			color.Red("帐号不存在,请重试")
-		}
-		if strings.Contains(html, "暂时锁定") == true {
-			DoubanAccount = ""
-			color.Red("帐号已经被锁定。")
-			os.Exit(0)
-		}
-		
-		login()
+		color.Red(description)
+
+		//login()
 	}
 }
 func makeListUrl(page int) string {
@@ -261,7 +244,7 @@ func filterIds(db *leveldb.DB, ids []string) []string {
 }
 func getContent(id string, c chan shyData) {
 	singleData := shyData{}
-	singleData.DoubanId = id
+	singleData.DouBanId = id
 	
 	html, errs := Request.Get("https://www.douban.com/group/topic/" + id + "/")
 	if errs != nil {
@@ -288,10 +271,10 @@ func getContent(id string, c chan shyData) {
 	doc.Find(".color-green").Each(func(i int, s *goquery.Selection) {
 		singleData.AuthorPublishDate = trim(s.Text())
 	})
-	//Authorame, 作者名.AuthorLink 作者连接
+	//AuthorName, 作者名.AuthorLink 作者连接
 	doc.Find(".from a").Each(func(i int, s *goquery.Selection) {
-		Authorame := s.Text()
-		singleData.Authorame = trim(Authorame)
+		AuthorName := s.Text()
+		singleData.AuthorName = trim(AuthorName)
 		
 		AuthorLink, _ := s.Attr("href")
 		singleData.AuthorLink = AuthorLink
@@ -355,14 +338,28 @@ func clearTags(str string) string {
 	str = regexp.MustCompile(`<img.*?src=([\"\'])(.*?)([\"\']).*?\/?>`).ReplaceAllString(str, "<img src=$1$2$3 />")
 	return str
 }
-func postToRomte() {
+func postToRemote() {
 	if len(AllShyData) > 0 {
 		color.Green("正在上传数据")
 		_, body, errs := Request.Request.Post(DataReceiveUrl).Type("multipart").Send(AllShyData).End()
 		if errs != nil {
 			outputAllErros(errs, true)
+		}
+		json := gjson.Parse(body)
+		if json.Get("code").Int() == 200 {
+			
+			color.Green("同步成功:", json.Get("run_num").Int())
+			for _, singleShyData := range AllShyData {
+				if singleShyData.FetchResult == "success" || singleShyData.FetchResult == "noImage" {
+					err := DB.Put([]byte(singleShyData.DouBanId), []byte("1"), nil)
+					if err != nil {
+						fmt.Println(err.Error())
+					}
+				}
+			}
 		} else {
-			color.Green("上传结束，收到返回：" + body)
+			color.Red("同步失败:" + body)
+			
 		}
 	} else {
 		color.Green("没有新数据")
